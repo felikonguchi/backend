@@ -16,15 +16,19 @@ db.init_app(app)
 jwt = JWTManager(app)
 
 #enable cors for routes ,allowing request from https"//local host 5173
-CORS(app, resources={r"/*":{"origin":"http://localhost:5173"}})
+CORS(app, resources={r"/*":{"origin":"http://localhost:5173/"}})
 
 with app.app_context():
     db.create_all()
 
+@app.rouite("/")
+def home():
+    return "Task Manager Backened is running"
+
 @app.route("/register", methods=["POST"]) 
 def register():
     data = request.get_json() 
-    if user.query.filter_by(usrname=data["username"]).first():
+    if user.query.filter_by(username=data["username"]).first():
         return jsonify({"msg":"usrename already exists, choose another name!"}), 400
     user = user(username =data["username"], password=data["password"])
     db.session.add(user)
@@ -36,17 +40,24 @@ def login():
     data = request.get_json()
     user = User.query.filter_by(username=data["username"]).first()
     if not user or user.password !=data["password"]:
-        return jsonify({"msg":"invalid credential. either the username or password is wrong!" }),
-    token = create_access_token(identity=user.id)
+        return jsonify({"msg":"invalid credential. either the username or password is wrong!" }),401
+    token = create_access_token(identity=str(user.id))
     return jsonify({"token": token}),401
 
 @app.route("/tasks", methods=["POST"])
 @jwt_required()
 def add_task():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     data = request.get.get_json()
     start_time = datetime.now() if data["start_now"] else datetime.strptime(data['start_time'],"%Y-%m-%dT%H:%M")
-    task = Task(title=data["title"], start_time=start_time, duration=data["duration"], user_id=user_id)
+    task = Task(
+        title=data["title"],
+        description = data.get("description"),
+        start_time=start_time,
+        duration=data["duration"],
+        done = data.get("done", False),
+        user_id=user_id
+        )
     db.session.add(task)
     db.session.commit()
     return jsonify({"msg":"task added"}),201
@@ -56,7 +67,7 @@ def add_task():
 def get_tasks():
     user_id = get_jwt_identity()
     tasks = Task.query.filter_by(user_id=user_id).all()
-    return jsonify([{"id":t.id, "title":t.title, " start_time " ;t.start_time.isoformat(), "duration":t.duraction}for t in task])
+    return jsonify([{"id":t.id, "title":t.title, "start_time":t.start_time.isoformat(), "duration":t.duration} for t in tasks])
 
 if __name__=="__main__":
     app.run(debug=True, port=5000)
